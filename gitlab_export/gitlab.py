@@ -5,8 +5,9 @@ import sys
 import time
 import os
 import re
-from requests_toolbelt import MultipartEncoder
 from os.path import getsize
+from io import BytesIO
+from requests_toolbelt import MultipartEncoder
 
 MAX_SIZE = 2147483647
 
@@ -39,26 +40,24 @@ class Api:
         data = {
             "path": project_name,
             "namespace": namespace,
-            "overwrite": True}
-        kwargs = {}
+            "overwrite": 'true'}
         try:
-            if getsize(filename) > MAX_SIZE:
-                m = MultipartEncoder(
-                    fields={
-                        "file": open(filename, 'rb'),
-                        "path": project_name,
-                        "namespace": namespace,
-                        "overwrite": True
-                    }
-                )
-                kwargs['data'] = m
+            if getsize(filename) > 2147483647:
+                data["file"] = (filename,open(filename, 'rb'),"text/plain")
+                m = MultipartEncoder(fields=data)
+                self.headers['Content-Type'] = m.content_type
+                return requests.post(
+                        self.api_url + "/projects/import",
+                        data=m,
+                        verify=self.ssl_verify,
+                        headers=self.headers,timeout=3600)
+
             return requests.post(
                 self.api_url + "/projects/import",
-                # data=data,
-                # files={"file": open(filename, 'rb')},
+                data=data,
+                files={"file": open(filename, 'rb')},
                 verify=self.ssl_verify,
-                headers=self.headers,
-                **kwargs)
+                headers=self.headers)
         except requests.exceptions.RequestException as e:
             print(e, file=sys.stderr)
             sys.exit(1)
@@ -208,7 +207,7 @@ class Api:
         project_name = os.path.basename(project_path)
         namespace = os.path.dirname(project_path)
 
-        
+
 
         # Let's import project
         r = self.__api_import(project_name, namespace, filepath)
